@@ -3,103 +3,64 @@
     // for the documentation about the tasks.json format
     "version": "2.0.0",
     "type": "shell",
+    "problemMatcher": [
+        {
+            "owner": "cpp",
+            "fileLocation": [
+                "relative",
+                "${workspaceRoot}"
+            ],
+            "pattern": {
+                "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+                "file": 1,
+                "line": 2,
+                "column": 3,
+                "severity": 4,
+                "message": 5
+            }
+        }, "$harbour"],
+    "options": {
+        "cwd": "${workspaceFolder}"
+    },
     "tasks": [
         {
             "label": "build",
-            "command": "hbmk2",
-            "windows": {
-                "command": "myBuild.bat"
-            },
+            "type": "HBMK2",
+            "input": "${file}",
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
-            "args": [ "-lcode_dbg", "-L.", "${relativeFile}", "-gtcgi", "-w", "-ql", "-b", "-gc3", "-winuni", "-debug"],
-            "problemMatcher": [
-            {
-                "owner": "cpp",
-                "fileLocation": [
-                    "relative",
-                    "${workspaceRoot}"
-                ],
-                "pattern": {
-                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                    "file": 1,
-                    "line": 2,
-                    "column": 3,
-                    "severity": 4,
-                    "message": 5
-                }
-            }, "$harbour"]
+            "extraArgs": [
+                "-lcode_dbg", "-L.", "-gtcgi", "-w", "-ql", "-b", "-gc3", "-winuni", "-debug"
+            ],
+            "windows": {
+                "setupBatch": "c:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\VC\\Auxiliary\\Build\\vcvars32.bat"
+            }
         },
         {
-            "label": "build_noLib",
-            "command": "hbmk2",
-            "windows": {
-                "command": "myBuild.bat"
-            },
-            "args": [ "${relativeFile}", "-gtcgi", "-w", "-ql", "-debug", "-inc" ],
-            "problemMatcher": [
-            {
-                "owner": "cpp",
-                "fileLocation": [
-                    "relative",
-                    "${workspaceRoot}"
-                ],
-                "pattern": {
-                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                    "file": 1,
-                    "line": 2,
-                    "column": 3,
-                    "severity": 4,
-                    "message": 5
-                }
-            }, "$harbour"]
+            "label": "buildX",
+            "command": "myBuildX.bat",
+            "args": [ "${fileBasenameNoExtension}"]
         },
         {
             "label": "createLibrary",
-            "command": "hbmk2",
-            "windows": {
-                "command": "myBuild.bat"
-            },
-            "args": [ "dbg_lib", "-w3", "-es2", "-ql", "-ocode_dbg","-gc3", "-hblib","-inc","-winuni"],
-            "problemMatcher": [
-            {
-                "owner": "cpp",
-                "fileLocation": [
-                    "relative",
-                    "${workspaceRoot}"
-                ],
-                "pattern": {
-                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                    "file": 1,
-                    "line": 2,
-                    "column": 3,
-                    "severity": 4,
-                    "message": 5
+            "type": "HBMK2",
+            "input": "dbg_lib.prg",
+            "options": {
+                "env": {
+                    "HB_INSTALL_PREFIX": "C:\\harbour"
                 }
-            }, "$harbour"]
+            },
+            "window":
+            {
+                "setupBatch": "c:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\VC\\Auxiliary\\Build\\vcvars32.bat"
+            },
+            "extraArgs": ["-w3", "-es2", "-ocode_dbg","-gc3", "-hblib","-inc","-winuni"]
         },
         {
             "label": "createLibraryX",
-            "command": "myBuildX.bat",
-            "args": [ "dbg_lib", "-ocode_dbgX", "-gc3", "-hblib","-inc","-winuni"],
-            "problemMatcher": [
-            {
-                "owner": "cpp",
-                "fileLocation": [
-                    "relative",
-                    "${workspaceRoot}"
-                ],
-                "pattern": {
-                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                    "file": 1,
-                    "line": 2,
-                    "column": 3,
-                    "severity": 4,
-                    "message": 5
-                }
-            }, "$harbour"]
+            "command": "build_libX.bat"
         }
     ]
 }

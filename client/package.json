@@ -2,10 +2,10 @@
     "name": "harbour",
     "displayName": "Harbour and xHarbour",
     "description": "Harbour and xHarbour languages support for visual studio code",
-    "version": "0.9.5",
+    "version": "0.9.13",
     "publisher": "aperricone",
     "icon": "harbourIcon.png",
-    "main": "./src/extension",
+    "main": "./dist/extension",
     "repository": {
         "url": "https://github.com/APerricone/harbourCodeExtension"
     },
@@ -15,7 +15,7 @@
         "workspaceContains:**/*.prg"
     ],
     "engines": {
-        "vscode": "^1.11.0"
+        "vscode": "^1.40.0"
     },
     "categories": [
         "Programming Languages",
@@ -24,17 +24,23 @@
         "Snippets"
     ],
     "dependencies": {
-        "vscode-debugadapter": "^1.35.0",
-        "vscode-debugprotocol": "^1.35.0",
-        "vscode-languageclient": "^5.2.1",
+        "true-case-path": "^2.2.1",
+        "vscode-debugadapter": "^1.38.0",
+        "vscode-debugprotocol": "^1.38.0",
+        "vscode-languageclient": "^6.1.0",
         "vscode-nls": "^4.1.1"
+    },
+    "scripts": {
+        "vscode:prepublish": "node copy.js",
+        "prelanch": "webpack --mode development",
+        "webpack2": "webpack --mode production"
     },
     "contributes": {
         "problemMatchers": [
             {
                 "name": "harbour",
                 "owner": "harbour",
-                "fileLocation": "relative",
+                "fileLocation": "autoDetect",
                 "pattern": {
                     "regexp": "^(?:([^\\(]*)\\((\\d+)\\)\\s+)(Warning|Error)\\s+(.*)$",
                     "file": 1,
@@ -108,10 +114,10 @@
                     "xBase"
                 ],
                 "extensions": [
-                    "prg",
-                    "ch",
-                    "hbx",
-                    "hb"
+                    ".prg",
+                    ".ch",
+                    ".hbx",
+                    ".hb"
                 ],
                 "configuration": "./syntaxes/language-configuration.json"
             }
@@ -135,7 +141,7 @@
             {
                 "type": "harbour-dbg",
                 "label": "Harbour",
-                "program": "./src/debugger.js",
+                "program": "./dist/debugger.js",
                 "runtime": "node",
                 "languages": [
                     "harbour"
@@ -166,7 +172,7 @@
                         }
                     },
                     {
-                        "label": "Harbour attach",
+                        "label": "Harbour attach program",
                         "description": "%harbour.configurationSnippetsDesc2%",
                         "body": {
                             "type": "harbour-dbg",
@@ -175,8 +181,33 @@
                             "program": "^\"\\${workspaceFolder}/${2:Program}\"",
                             "sourcePaths": "^[\"\\${workspaceFolder}\"]"
                         }
+                    },
+                    {
+                        "label": "Harbour attach process",
+                        "description": "%harbour.configurationSnippetsDesc2%",
+                        "body": {
+                            "type": "harbour-dbg",
+                            "request": "attach",
+                            "name": "%harbour.configurationSnippets2%",
+                            "process": "${2:processId}",
+                            "sourcePaths": "^[\"\\${workspaceFolder}\"]"
+                        }
+                    },
+                    {
+                        "label": "Harbour attach selectProcess",
+                        "description": "%harbour.configurationSnippetsDesc3%",
+                        "body": {
+                            "type": "harbour-dbg",
+                            "request": "attach",
+                            "name": "%harbour.configurationSnippets3%",
+                            "process": "^\"\\${command:pickProcess}\"",
+                            "sourcePaths": "^[\"\\${workspaceFolder}\"]"
+                        }
                     }
                 ],
+                "variables": {
+                    "pickProcess": "harbour.debugList"
+                },
                 "configurationAttributes": {
                     "launch": {
                         "required": [
@@ -190,12 +221,14 @@
                             },
                             "program": {
                                 "type": "string",
-                                "description": "%harbour.launch.program%"
+                                "description": "%harbour.launch.program%",
+                                "required": true
                             },
                             "workingDir": {
                                 "type": "string",
                                 "description": "%harbour.launch.workingDir%",
-                                "default": "${workspaceFolder}/"
+                                "default": "${workspaceFolder}/",
+                                "required": true
                             },
                             "arguments": {
                                 "type": "array",
@@ -237,9 +270,6 @@
                         }
                     },
                     "attach": {
-                        "required": [
-                            "program"
-                        ],
                         "properties": {
                             "workspaceRoot": {
                                 "type": "string",
@@ -249,6 +279,20 @@
                             "program": {
                                 "type": "string",
                                 "description": "%harbour.launch.program%"
+                            },
+                            "process": {
+                                "anyOf": [
+                                    {
+                                        "type": "string",
+                                        "default": "${command:pickProcess}",
+                                        "description": "%harbour.attach.process%"
+                                    },
+                                    {
+                                        "type": "number",
+                                        "default": 0,
+                                        "description": "%harbour.attach.process%"
+                                    }
+                                ]
                             },
                             "sourcePaths": {
                                 "type": "array",
@@ -273,8 +317,177 @@
         "snippets": [
             {
                 "language": "harbour",
-                "path": "src/harbour.code-snippets"
+                "path": "harbour.code-snippets"
+            }
+        ],
+        "taskDefinitions": [
+            {
+                "type": "Harbour",
+                "required": [
+                    "output"
+                ],
+                "properties": {
+                    "input": {
+                        "type": "string",
+                        "default": "${file}",
+                        "description": "%harbour.task.input%"
+                    },
+                    "output": {
+                        "type": "string",
+                        "enum": [
+                            "portable",
+                            "C code"
+                        ],
+                        "description": "%harbour.task.output%"
+                    },
+                    "c-type": {
+                        "type": "string",
+                        "enum": [
+                            "compact",
+                            "normal",
+                            "verbose",
+                            "real C Code"
+                        ],
+                        "default": "compact",
+                        "description": "%harbour.task.ctype%"
+                    }
+                }
+            },
+            {
+                "type": "HBMK2",
+                "required": [
+                    "input"
+                ],
+                "properties": {
+                    "input": {
+                        "type": "string",
+                        "default": "${file}",
+                        "description": "%harbour.task.HBMK2.input%"
+                    },
+                    "output": {
+                        "type": "string",
+                        "default": "${file}",
+                        "description": "%harbour.task.HBMK2.output%"
+                    },
+                    "extraArgs": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "description": "%harbour.task.HBMK2.extraArgs%"
+                    },
+                    "platform": {
+                        "type": "string",
+                        "enum": [
+                            "linux",
+                            "darwin",
+                            "win",
+                            "wce",
+                            "os2",
+                            "dos",
+                            "bsd",
+                            "hpux",
+                            "beos",
+                            "qnx",
+                            "android",
+                            "vxworks",
+                            "symbian",
+                            "cygwin",
+                            "minix",
+                            "aix",
+                            "sunos"
+                        ],
+                        "description": "%harbour.task.HBMK2.platform%"
+                    },
+                    "compiler": {
+                        "type": "string",
+                        "enum": [
+                            "gcc",
+                            "clang",
+                            "icc",
+                            "watcom",
+                            "sunpro",
+                            "open64",
+                            "mingw",
+                            "msvc",
+                            "bcc",
+                            "bcc64",
+                            "pocc",
+                            "xcc",
+                            "mingw64",
+                            "msvc64",
+                            "msvcia64",
+                            "iccia64",
+                            "pocc64",
+                            "mingwarm",
+                            "msvcarm",
+                            "poccarm",
+                            "gccomf",
+                            "djgpp",
+                            "gccarm",
+                            "diab"
+                        ],
+                        "description": "%harbour.task.HBMK2.compiler%"
+                    },
+                    "debugSymbols": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "%harbour.task.HBMK2.debug%"
+                    },
+                    "setupBatch": {
+                        "type": "string",
+                        "description": "%harbour.task.HBMK2.setupBatch%"
+                    },
+                    "options": {
+                        "type": "object",
+                        "properties": {
+                            "env": {
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "windows": {
+                        "type": "object",
+                        "properties": {
+                            "setupBatch": {
+                                "type": "string",
+                                "description": "%harbour.task.HBMK2.setupBatch%"
+                            },
+                            "env": {
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "linux": {
+                        "type": "object",
+                        "properties": {
+                            "setupBatch": {
+                                "type": "string",
+                                "description": "%harbour.task.HBMK2.setupBatch%"
+                            },
+                            "env": {
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "osx": {
+                        "type": "object",
+                        "properties": {
+                            "setupBatch": {
+                                "type": "string",
+                                "description": "%harbour.task.HBMK2.setupBatch%"
+                            },
+                            "env": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                }
             }
         ]
+    },
+    "devDependencies": {
+        "webpack": "^4.41.6",
+        "webpack-cli": "^3.3.11"
     }
 }

@@ -1,14 +1,13 @@
 {
-	// See https://go.microsoft.com/fwlink/?LinkId=733558
-	// for the documentation about the tasks.json format
-	"version": "0.1.0",
-	"tasks": [
-		{
-			"taskName": "copy to client",
-			"command": "${workspaceRoot}/copy.sh",
-			"windows": {
-				"command": "${workspaceRoot}/copy.bat"
-			}
-		}
-	]
+// Vedere https://go.microsoft.com/fwlink/?LinkId=733558
+    // per la documentazione relativa al formato tasks.json
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "prelanch",
+            "type": "npm",
+            "script": "prelanch",
+            "problemMatcher": []
+        }
+    ]
 }

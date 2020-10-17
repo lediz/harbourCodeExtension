@@ -1,5 +1,4 @@
-var vscode = require('vscode');
-var client = require('vscode-languageclient');
+const vscode = require('vscode');
 
 // reuse the bracket-match style
 
@@ -10,12 +9,10 @@ function activate(context,_client)
 {
 	client=_client;
 	decoration = vscode.window.createTextEditorDecorationType({
-		light: {
-			border: 'solid 1px darkblue',
-		},
-		dark: {
-			border: 'solid 1px lightblue',
-		}
+		borderStyle: 'solid',
+		borderWidth: '1px',
+		borderColor: new vscode.ThemeColor("editorBracketMatch.border"),
+		backgroundColor: new vscode.ThemeColor("editorBracketMatch.background")
 	});
 	vscode.window.onDidChangeTextEditorSelection((e) => showGroups(e) );
 }
@@ -39,9 +36,9 @@ function showGroups(evt)
 		var places = [];
 		for (let k = 0; k < ranges.length; k++) {
 			const rr = ranges[k];
-			places.push({ range: new vscode.Range(rr.line,rr.startCol,rr.line,rr.endCol) });	
+			places.push({ range: new vscode.Range(rr.line,rr.startCol,rr.line,rr.endCol) });
 		}
-		
+
 		evt.textEditor.setDecorations(decoration, places);
 	})
 }

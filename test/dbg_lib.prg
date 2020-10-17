@@ -20,7 +20,11 @@
 
 //#define _DEBUGDEBUG
 #ifdef _DEBUGDEBUG
+#ifdef INAPACHE
+#command ? [<explist,...>] => AP_RPuts( <explist>, "<br>" )
+#else
 #command ? [<explist,...>] => dbgQOut( <explist> )
+#endif
 #else
 #command ? [<explist,...>] =>
 #endif
@@ -57,12 +61,16 @@ static procedure CheckSocket(lStopSent)
 		hb_inetInit()
 		t_oDebugInfo['socket'] := hb_inetCreate(140-t_oDebugInfo['timeCheckForDebug']*10)
 		hb_inetConnect("127.0.0.1",DBG_PORT,t_oDebugInfo['socket'])
-		if hb_inetErrorCode(t_oDebugInfo['socket']) <> 0			
+		if hb_inetErrorCode(t_oDebugInfo['socket']) <> 0
 			//QOut("failed")			// no server found
 			tmp := "NO"
 		else
 			//QOut("connected") //server found, send my exeName and my processId
+#ifdef INAPACHE
+			hb_inetSend(t_oDebugInfo['socket'],GetAppName()+CRLF+str(__PIDNum())+CRLF)
+#else
 			hb_inetSend(t_oDebugInfo['socket'],HB_ARGV(0)+CRLF+str(__PIDNum())+CRLF)
+#endif
 			do while hb_inetDataReady(t_oDebugInfo['socket']) != 1 //waiting for response
 				hb_idleSleep(0.2)
 			end do
@@ -70,7 +78,7 @@ static procedure CheckSocket(lStopSent)
 			//QOut("returned ",tmp)
 			// End of handshake
 		endif
-		if tmp="NO" //server not found or handshake failed 
+		if tmp="NO" //server not found or handshake failed
 			t_oDebugInfo['socket'] := nil
 			t_oDebugInfo['timeCheckForDebug']+=1
 		endif
@@ -139,7 +147,7 @@ static procedure CheckSocket(lStopSent)
 						END_COM
 					COMMAND "EXIT" // go to callee procedure
 						t_oDebugInfo['lRunning'] := .T.
-						t_oDebugInfo['maxLevel'] := t_oDebugInfo['__dbgEntryLevel']-1
+						t_oDebugInfo['maxLevel'] := -1
 						t_oDebugInfo['inError'] := .F. // If it was on error, now it doesn't
 						lNeedExit := .T.
 						END_COM
@@ -228,7 +236,7 @@ static procedure CheckSocket(lStopSent)
 					lStopSent := .T.
 				endif
 			endif
-			if .not. empty(t_oDebugInfo['maxLevel'])
+			if .not. empty(t_oDebugInfo['maxLevel']) .and. t_oDebugInfo['maxLevel']>0
 				//? "maxLevel",t_oDebugInfo['maxLevel'], t_oDebugInfo['__dbgEntryLevel']
 				if t_oDebugInfo['maxLevel'] < t_oDebugInfo['__dbgEntryLevel']
 					// we are not in the same procedure
@@ -260,32 +268,42 @@ return
 
 static procedure sendStack()
 	local i,d, line, module, functionName, start := 3
-	LOCAL t_oDebugInfo := __DEBUGITEM()
-#ifdef _DEBUGDEBUG
+	LOCAL t_oDebugInfo := __DEBUGITEM(), n, nLevel
 	local aStack := t_oDebugInfo['aStack']
-#endif
 	if t_oDebugInfo['inError']
 		start := 4
 	endif
 	//start := 0
-	d := __dbgProcLevel()-1
+	nLevel := __dbgProcLevel()
+	d := nLevel-1
 	//? "send stack---", start,d, t_oDebugInfo['__dbgEntryLevel']
 	hb_inetSend(t_oDebugInfo['socket'],"STACK " + alltrim(str(d-start+1))+CRLF)
 	for i:=start to d
-		line			:= procLine(i)
-		module			:= strTran(procFile(i),":",";")
-		functionName	:= strTran(ProcName(i),":",";")
+		line := procLine(i)
+		module := ProcFile(i)
+		if (n:=aScan(aStack,{|x| (nLevel-x[HB_DBG_CS_LEVEL])==i}))>0
+			module := aStack[n,HB_DBG_CS_MODULE]
+		endif
+#ifdef INAPACHE
+		module := strTran(FixProcFile(module),":",";")
+#else
+		module := strTran(module,":",";")
+#endif
+		functionName := strTran(ProcName(i),":",";")
 		hb_inetSend(t_oDebugInfo['socket'], module+":"+alltrim(str(line))+":"+functionName+CRLF)
 	next
-	//? "---"
-#ifdef _DEBUGDEBUG
-	for i:=1 to len(aStack)
-		line			:= aStack[i,HB_DBG_CS_LINE]
-		module			:= aStack[i,HB_DBG_CS_MODULE]
-		functionName	:= aStack[i,HB_DBG_CS_FUNCTION]		
-		//? i," DEBUG ", module,":",alltrim(str(line)),":",functionName,aStack[i,HB_DBG_CS_LEVEL],len(aStack[i,HB_DBG_CS_LOCALS]),len(aStack[i,HB_DBG_CS_LOCALS])
-	next
-#endif
+
+	//? "send stack---", t_oDebugInfo['__dbgEntryLevel'], nLevel
+	//for i:=len(aStack) to 1 step -1
+	//	? "memoStack",i,aStack[i,HB_DBG_CS_LEVEL],(nLevel-aStack[i,HB_DBG_CS_LEVEL]),aStack[i,HB_DBG_CS_MODULE],aStack[i,HB_DBG_CS_LINE]
+	//next
+	//for i:=start to d
+	//	if (n:=aScan(aStack,{|x| (nLevel-x[HB_DBG_CS_LEVEL])==i}))>0
+	//		? "sendStack",i,aStack[n,HB_DBG_CS_MODULE], ProcLine(i), "*"
+	//	else
+	//		? "sendStack",i,procFile(i), ProcLine(i)
+	//	endif
+	//next
 return
 
 static function format(value)
@@ -679,7 +697,7 @@ static procedure sendCoumpoundVar(req, cParams )
 	hb_inetSend(t_oDebugInfo['socket'],"END"+CRLF)
 return
 
-static function IsValidFileName(cModule) 
+static function IsValidFileName(cModule)
 	LOCAL iModule, t_oDebugInfo := __DEBUGITEM()
 	//? "IsValidFileName: ", cModule
 	cModule := ExtractFileName(cModule)
@@ -782,7 +800,13 @@ return
 static function inBreakpoint()
 	LOCAL aBreaks := __DEBUGITEM()['aBreaks']
 	LOCAL nLine := procLine(3), aBreakInfo
-	local idLine, cFile := ExtractFileName(procFile(3)), nExtra := 2
+	local idLine
+	#ifdef INAPACHE
+	local cFile := ExtractFileName(FixProcFile(ProcFile(3)))
+	#else
+	local cFile := ExtractFileName(ProcFile(3))
+	#endif
+	local nExtra := 2
 	LOCAL ck
 	if .not. hb_HHasKey(aBreaks,cFile)
 		return .F.
@@ -861,7 +885,7 @@ static function ExtractFileName(cFileName)
 	#else
 		cFileName := alltrim(cFileName)
 	#endif
-	idx := rat(hb_ps(), cFileName)
+	idx := rat(hb_osPathSeparator(), cFileName)
 	if idx>0
 		cFileName:=substr(cFileName,idx+1)
 	endif
@@ -878,7 +902,7 @@ static procedure AddModule(aInfo)
 		fFileModules := fopen("modules.dbg",1+64)
 		fSeek(fFileModules,0,2)
 	#endif
-	   for i:=1 to len(aInfo)		
+	for i:=1 to len(aInfo)
 		aInfo[i,1] := ExtractFileName(aInfo[i,1])
 		if len(aInfo[i,1])=0
 			loop
@@ -1183,12 +1207,39 @@ STATIC PROCEDURE ErrorBlockCode( e )
 	endif
 return
 
+#ifdef INAPACHE
+static function GetAppName()
+	local cAppName := HB_ArgV( 0 )
+  do case
+	case "Darwin" $ OS()
+		 cAppName = "/System/Library/CoreServices/Dock.app/Contents/MacOS/Dock"
+	case "Linux" $ OS()
+		 cAppName = "..."
+  endcase
+return cAppName
+
+static function FixProcFile( cProcFile,lRemoveDriveLetter )
+	local cResult := cProcFile
+	if ("{SOURCE}" $ upper(cResult)) .or. ("pcode.hrb" $ lower(cResult))
+		cResult := AP_FileName()
+		if hb_DefaultValue(lRemoveDriveLetter,.f.)
+			cResult := SubStr( cResult, At( ":", cResult ) + 1 )
+	  endif
+	endif
+return cResult
+#endif
+
 PROCEDURE __dbgEntry( nMode, uParam1, uParam2, uParam3 )
 	local tmp, i
-	LOCAL t_oDebugInfo
+	LOCAL t_oDebugInfo, lAdd
 	if nMode = HB_DBG_GETENTRY
 		return
 	endif
+	#ifdef INAPACHE
+	if nMode == HB_DBG_VMQUIT
+		return
+	endif
+	#endif
 	t_oDebugInfo := __DEBUGITEM()
 	switch nMode
 		case HB_DBG_MODULENAME
@@ -1219,10 +1270,26 @@ PROCEDURE __dbgEntry( nMode, uParam1, uParam2, uParam3 )
 					fclose(fcreate("modules.dbg"))
 				#endif
 			endif
-			//? "moduleName",uParam1,t_oDebugInfo['maxLevel'], t_oDebugInfo['__dbgEntryLevel']
 
 			i := rat(":",uParam1)
-			tmp := Array(HB_DBG_CS_LEN)
+			tmp := ATail(t_oDebugInfo['aStack'])
+			lAdd := (empty(tmp) .or. __dbgProcLevel()-1!=tmp[HB_DBG_CS_LEVEL])
+			lAdd := lAdd .or. t_oDebugInfo['bInitStatics']
+			lAdd := lAdd .or. t_oDebugInfo['bInitGlobals']
+			lAdd := lAdd .or. t_oDebugInfo['bInitLines']
+			if lAdd
+				tmp := Array(HB_DBG_CS_LEN)
+			endif
+
+#ifdef INAPACHE
+			if i=0
+				tmp[HB_DBG_CS_MODULE] := FixProcFile(uParam1)
+				tmp[HB_DBG_CS_FUNCTION] := procName(1)
+			else
+				tmp[HB_DBG_CS_MODULE] := FixProcFile(left(uParam1,i-1),.t.)
+				tmp[HB_DBG_CS_FUNCTION] := substr(uParam1,i+1)
+			endif
+#else
 			if i=0
 				tmp[HB_DBG_CS_MODULE] := uParam1
 				tmp[HB_DBG_CS_FUNCTION] := procName(1)
@@ -1230,6 +1297,9 @@ PROCEDURE __dbgEntry( nMode, uParam1, uParam2, uParam3 )
 				tmp[HB_DBG_CS_MODULE] := left(uParam1,i-1)
 				tmp[HB_DBG_CS_FUNCTION] := substr(uParam1,i+1)
 			endif
+#endif
+			? "moduleName",uParam1,t_oDebugInfo['maxLevel'], t_oDebugInfo['__dbgEntryLevel'], procFile(1), __dbgProcLevel()-1, lAdd
+
 			tmp[HB_DBG_CS_LINE] := procLine(1) // line
 			tmp[HB_DBG_CS_LEVEL] := __dbgProcLevel()-1 // level
 			tmp[HB_DBG_CS_LOCALS] := {} // locals
@@ -1248,13 +1318,18 @@ PROCEDURE __dbgEntry( nMode, uParam1, uParam2, uParam3 )
 			elseif at("_INITLINES", tmp[HB_DBG_CS_FUNCTION])<>0
 				t_oDebugInfo['bInitLines'] := .T.
 			endif
-			aAdd(t_oDebugInfo['aStack'], tmp)
+			if lAdd
+				aAdd(t_oDebugInfo['aStack'], tmp)
+				if .not. empty(t_oDebugInfo['maxLevel']) .and. t_oDebugInfo['maxLevel']<0
+					t_oDebugInfo['maxLevel']-=1
+				endif
+			endif
 			exit
 		case HB_DBG_LOCALNAME
 			if t_oDebugInfo['bInitGlobals']
 				//? "LOCALNAME - bInitGlobals", uParam1, uParam2, uParam3, valtype(uParam1), valtype(uParam2), valtype(uParam3),  __dbgProcLevel()-1,procLine(__dbgProcLevel()-1)
 			else
-				aAdd(t_oDebugInfo['aStack'][len(t_oDebugInfo['aStack'])][HB_DBG_CS_LOCALS], {uParam2, uParam1, "L", __dbgProcLevel()-1})
+				aAdd(aTail(t_oDebugInfo['aStack'])[HB_DBG_CS_LOCALS], {uParam2, uParam1, "L", __dbgProcLevel()-1})
 			endif
 			exit
 		case HB_DBG_STATICNAME
@@ -1277,29 +1352,31 @@ PROCEDURE __dbgEntry( nMode, uParam1, uParam2, uParam3 )
 			else
 				//? "STATICNAME", uParam1, uParam2, uParam3, valtype(uParam1), valtype(uParam2), valtype(uParam3),  __dbgProcLevel()
 				//aEval(uParam1,{|x,n| QOut(n,valtype(x),x)})
-				aAdd(t_oDebugInfo['aStack'][len(t_oDebugInfo['aStack'])][HB_DBG_CS_STATICS], {uParam3, uParam2, "S", uParam1})
+				aAdd(aTail(t_oDebugInfo['aStack'])[HB_DBG_CS_STATICS], {uParam3, uParam2, "S", uParam1})
 			endif
 			exit
 		case HB_DBG_ENDPROC
 			//uParam1 := __GETLASTRETURN(12)
 			//? "EndPROC", uParam1, uParam2, uParam3, valtype(uParam1), valtype(uParam2), valtype(uParam3)
 			//? "EndPROC",procName(1),t_oDebugInfo['maxLevel'], t_oDebugInfo['__dbgEntryLevel'], __dbgProcLevel()
-			if .not. empty(t_oDebugInfo['maxLevel'])
-				if t_oDebugInfo['maxLevel'] >= __dbgProcLevel()-1
+			if .not. empty(t_oDebugInfo['maxLevel'])  .and. t_oDebugInfo['maxLevel']<0
+				t_oDebugInfo['maxLevel']+=1
+				if t_oDebugInfo['maxLevel']==0
 					//? "stopped for OUT"
 					t_oDebugInfo['lRunning']:=.F.
+					t_oDebugInfo['maxLevel']:=nil
 				endif
 			endif
 			aSize(t_oDebugInfo['aStack'],len(t_oDebugInfo['aStack'])-1)
 			if t_oDebugInfo['bInitLines']
 				// I don't like this hack, shoud be better if in case of HB_DBG_ENDPROC
 				// uParam1 is the returned value, it allow to show it in watch too...
-				// * Harbour is 12
-				// * xHarbur is 13
+				// * Harbour is 13
+				// * xHarbur is 14
 				#ifdef __XHARBOUR__
-					tmp := __GETLASTRETURN(13) //; ? 13,valtype(tmp),tmp
+					tmp := __GETLASTRETURN(14) //; ? 14,valtype(tmp),tmp
 				#else
-					tmp := __GETLASTRETURN(12) //; ? 12,valtype(tmp),tmp
+					tmp := __GETLASTRETURN(13) //; ? 13,valtype(tmp),tmp
 				#endif
 				AddModule(tmp)
 			endif
@@ -1309,7 +1386,7 @@ PROCEDURE __dbgEntry( nMode, uParam1, uParam2, uParam3 )
 			t_oDebugInfo['bInitLines'] := .F.
 			exit
 		case HB_DBG_SHOWLINE
-			//? "show line:" + procFile(1) + "("+alltrim(str(uParam1))+")", len(t_oDebugInfo['aStack'])
+			? "show line:" + procFile(1) + "("+alltrim(str(uParam1))+")", __dbgProcLevel()
 			//for i:= 1 to len(t_oDebugInfo['aStack'])
 			//	? i,t_oDebugInfo['aStack',i,HB_DBG_CS_FUNCTION],t_oDebugInfo['aStack',i,HB_DBG_CS_LINE]
 			//next
@@ -1340,7 +1417,7 @@ PROCEDURE __dbgEntry( nMode, uParam1, uParam2, uParam3 )
 			#endif
 			t_oDebugInfo['error'] := nil
 			t_oDebugInfo['inError'] := .F.
-			t_oDebugInfo['aStack'][len(t_oDebugInfo['aStack'])][HB_DBG_CS_LINE] := uParam1
+			t_oDebugInfo['aStack',len(t_oDebugInfo['aStack']),HB_DBG_CS_LINE] := uParam1
 			CheckSocket()
 			__dbgInvokeDebug(.F.)
 			exit
@@ -1409,6 +1486,8 @@ HB_FUNC( __PIDNUM )
    hb_retnint( getpid() );
 #endif
 }
+
+#ifndef __XHARBOUR__
 #if !defined( _HB_API_INTERNAL_ ) && !defined( _HB_STACK_MACROS_ )
 extern HB_EXPORT HB_ISIZ     hb_stackGetRecoverBase( void );
 #endif
@@ -1417,5 +1496,26 @@ HB_FUNC( ISBEGSEQ )
 {
    hb_retl( hb_stackGetRecoverBase() != 0 );
 }
+#else
+
+HB_FUNC( ISBEGSEQ )
+{
+#ifndef _HB_API_INTERNAL_
+	hb_retl( HB_FALSE );
+#else
+   hb_retl( HB_VM_STACK.lRecoverBase!=0 );
+#endif
+}
+
+#endif
+
+#ifdef INAPACHE
+#include <hbapicls.h>
+HB_FUNC( __DBGSENDMSG )
+{
+   hb_dbg_objSendMessage( hb_parnl( 1 ), hb_param( 2, HB_IT_ANY ),
+                          hb_param( 3, HB_IT_ANY ), 4 );
+}
+#endif
 
 #pragma ENDDUMP

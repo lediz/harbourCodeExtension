@@ -1,11 +1,11 @@
-var vscode = require('vscode');
-var cp = require("child_process");
-var path = require("path");
-var localize = require("./myLocalize.js").localize;
+const vscode = require('vscode');
+const cp = require("child_process");
+const path = require("path");
+const localize = require("./myLocalize.js").localize;
 
 var diagnosticCollection;
 
-function activate(context) 
+function activate(context)
 {
     diagnosticCollection = vscode.languages.createDiagnosticCollection('harbour');
 	context.subscriptions.push(diagnosticCollection);
@@ -31,10 +31,7 @@ function validate(textDocument)
 	if(!section.validating)
 		return;
 	var args = ["-s", "-q0", "-m", "-n0", "-w"+section.warningLevel, textDocument.fileName ];
-	var file_cwd = vscode.workspace.rootPath;
-	if(!file_cwd) {
-		file_cwd=path.dirname(textDocument.fileName);
-	}
+	var file_cwd = path.dirname(textDocument.fileName);
 	for (var i = 0; i < section.extraIncludePaths.length; i++) {
 		var pathVal = section.extraIncludePaths[i];
 		if(pathVal.indexOf("${workspaceFolder}")>=0) {
@@ -43,17 +40,13 @@ function validate(textDocument)
 		args.push("-I"+pathVal);
 	}
 	args = args.concat(section.extraOptions.split(" ").filter(function(el) {return el.length != 0}));
-	var process = cp.spawn(section.compilerExecutable,args, { cwd: file_cwd });
-	process.on("error", e=>
-	{
-		vscode.window.showWarningMessage(localize("harbour.validation.NoExe",section.compilerExecutable));
-	});
 	var diagnostics = {};
 	diagnostics[textDocument.fileName] = [];
 	var errorLines = "";
 	function parseData(data)
 	{
 		errorLines += data.toString();
+		errorLines = errorLines.replace(/[\r\n]/g,"\n")
 		var p;
 		while((p=errorLines.indexOf("\n"))>=0)
 		{
@@ -91,13 +84,18 @@ function validate(textDocument)
 						diagnostics[r[1]].push(new vscode.Diagnostic(new vscode.Range(lineNr,m.index,lineNr,m.index+subject[0].length),
 							r[4], r[3]=="Warning"? 1 : 0))
 					}
-				} 
+				}
 				if(putAll)
 					diagnostics[r[1]].push(new vscode.Diagnostic(line.range,
 						r[4], r[3]=="Warning"? 1 : 0))
 			}
 		}
 	}
+	var process = cp.spawn(section.compilerExecutable,args, { cwd: file_cwd });
+	process.on("error", e=>
+	{
+		vscode.window.showWarningMessage(localize("harbour.validation.NoExe",section.compilerExecutable));
+	});
 	process.stderr.on('data', parseData);
 	process.stdout.on('data', parseData);
 	process.on("exit",function(code)
@@ -105,7 +103,7 @@ function validate(textDocument)
 		for (var file in diagnostics) {
 			if (diagnostics.hasOwnProperty(file)) {
 				var infos = diagnostics[file];
-				diagnosticCollection.set(vscode.Uri.file(file), infos);		
+				diagnosticCollection.set(vscode.Uri.file(file), infos);
 			}
 		}
 	});

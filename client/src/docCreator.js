@@ -1,8 +1,6 @@
-var vscode = require('vscode');
-var client = require('vscode-languageclient');
+const vscode = require('vscode');
 
 // reuse the bracket-match style
-
 var decoration;
 /** @type{client.LanguageClient} */
 var client;
@@ -17,8 +15,8 @@ function WriteDoc(evt) {
 	if(!editor) return;
 	if(!editor.document) return;
     if(editor.document.languageId!="harbour") return;
-    if( evt.selections.length>1 || 
-        evt.selections[0].start.line!=evt.selections[0].end.line || 
+    if( evt.selections.length>1 ||
+        evt.selections[0].start.line!=evt.selections[0].end.line ||
         evt.selections[0].start.character!=evt.selections[0].end.character)
         return;
     var destRange = new vscode.Range(evt.selections[0].start.line,0,evt.selections[0].start.line,100);
